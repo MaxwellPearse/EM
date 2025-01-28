@@ -1,0 +1,260 @@
+---
+title: "Assignment 3, Maxwell Pearse 831845, MAST30027, Mon 10-11, Yong See Foo"
+output:
+  word_document: default
+  html_document: default
+---
+```{r}
+X <- scan(file="assignment3_2024_prob1.txt", what=double())
+length(X)
+hist(X, breaks=0:max(X))
+```
+
+##  Question 1a  
+
+![](1.png)
+
+##  Question 1b  
+
+![](3.png)
+
+##  Question 1c  
+
+![](2.png)
+
+##  Question 1d
+
+```{r} 
+# w.init : initial value for pi
+# p.init : initial value for mu
+# epsilon : If the incomplete log-likelihood has changed by less than epsilon,
+# EM will stop.
+# max.iter : maximum number of EM-iterations
+mixture.EM <- function(X, w.init, p.init, epsilon=1e-5, max.iter=500) {
+  w.curr = w.init
+  p.curr = p.init
+  # store incomplete log-likehoods for each iteration
+  log_liks = c()
+  # compute incomplete log-likehoods using initial values of parameters.
+  log_liks = c(log_liks, compute.log.lik(X, w.curr, p.curr)$ill)
+  # set the change in incomplete log-likelihood with 1
+  delta.ll = 1
+  # number of iteration
+  n.iter = 1
+  # If the log-likelihood has changed by less than epsilon, EM will stop.
+  while((delta.ll > epsilon) & (n.iter <= max.iter)){
+    # run EM step
+    EM.out = EM.iter(X, w.curr, p.curr)
+    # replace the current value with the new parameter estimate
+    w.curr = EM.out$w.new
+    p.curr = EM.out$p.new
+    # incomplete log-likehoods with new parameter estimate
+    log_liks = c(log_liks, compute.log.lik(X, w.curr, p.curr)$ill)
+    # compute the change in incomplete log-likelihood
+    delta.ll = log_liks[length(log_liks)] - log_liks[length(log_liks)-1]
+    # increase the number of iteration
+    n.iter = n.iter + 1
+  }
+  return(list(w.curr=w.curr, p.curr=p.curr, log_liks=log_liks))
+}
+ 
+EM.iter <- function(X, w.curr, p.curr) {
+  # E-step: compute E_{Z|X,\theta_0}[I(Z_i = k)]
+  # for each sample $X_i$, compute $P(X_i, Z_i=k)$
+  prob.x.z = compute.prob.x.z(X, w.curr, p.curr)$prob.x.z
+  # compute P(Z_i=k | X_i)
+  P_ik = prob.x.z / rowSums(prob.x.z)
+  # M-step
+  w.new = colSums(P_ik)/sum(P_ik) # sum(P_ik) is equivalent to sample size
+  p.new = 10*colSums(P_ik)/(10*colSums(P_ik)+colSums(P_ik*X))
+  return(list(w.new=w.new, p.new=p.new))
+}
+ 
+# Compute incomplete log-likehoods
+compute.log.lik <- function(X, w.curr, p.curr) {
+  # for each sample $X_i$, compute $P(X_i, Z_i=k)$
+  prob.x.z = compute.prob.x.z(X, w.curr, p.curr)$prob.x.z
+  # incomplete log-likehoods
+  ill = sum(log(rowSums(prob.x.z)))
+  return(list(ill=ill))
+}
+# for each sample $X_i$, compute $P(X_i, Z_i=k)$
+compute.prob.x.z <- function(X, w.curr, p.curr) {
+  # for each sample $X_i$, compute $P(X_i, Z_i=k)$. Store these values in the columns of L:
+  L = matrix(NA, nrow=length(X), ncol= length(w.curr))
+  for(k in seq_len(ncol(L))) {
+    L[, k] = dnbinom(X,10, p.curr[k])*w.curr[k]
+  }
+  return(list(prob.x.z=L))
+}
+```
+
+```{r}
+EM1 <- mixture.EM(X, w.init=c(0.1,0.3, 0.6), p.init=c(0.1, 0.8, 0.5), epsilon=1e-5, max.iter=500)
+ee = EM1
+print(paste("Estimate pi = (", round(ee$w.curr[1],2), ",",
+            round(ee$w.curr[2],2), ",",
+            round(ee$w.curr[3],2), ")", sep=""))
+print(paste("Estimate p = (", round(ee$p.curr[1],2), ",",
+            round(ee$p.curr[2],2), ",",
+            round(ee$p.curr[3],2), ")", sep=""))
+```
+
+```{r}
+plot(ee$log_liks, ylab='incomplete log-likelihood', xlab='iteration')
+```
+
+```{r}
+EM2 <- mixture.EM(X, w.init=c(0.2,0.4, 0.4), p.init=c(0.3, 0.2, 0.7), epsilon=1e-5, max.iter=500)
+ee2 = EM2
+print(paste("Estimate pi = (", round(ee2$w.curr[1],2), ",",
+            round(ee2$w.curr[2],2), ",",
+            round(ee2$w.curr[3],2), ")", sep=""))
+
+print(paste("Estimate p = (", round(ee2$p.curr[1],2), ",",
+            round(ee2$p.curr[2],2), ",",
+            round(ee2$p.curr[3],2), ")", sep=""))
+```
+
+```{r}
+plot(ee2$log_liks, ylab='incomplete log-likelihood', xlab='iteration')
+```
+
+Check which estimators have the highest incomplete log-likelihood.
+```{r}
+EM1$log_liks[length(EM1$log_liks)]
+EM2$log_liks[length(EM2$log_liks)]
+```
+Estimators from both EM runs have equally highest incomplete log-likelihodds. We can see the estimators form the EM runs are the same if labels for clusters are switched. So it does not matter which estimators we choose. I will choose the estimators form the first EM run
+$\hat\pi_1$ = 0.22, $\hat\pi_2$= 0.5, $\hat\pi_3$= 0.28, $\hat{p}_1$ =0.14, $\hat{p}_2$=0.56, $\hat{p}_3$=0.26.
+
+## Question 2
+```{r}
+X.more <- scan(file="assignment3_2024_prob2.txt", what=double())
+length(X)
+length(X.more)
+xgrid <- 0:max(c(X,X.more))
+hist(X, breaks=xgrid, ylim=c(0,21), main="Histogram of X", xlab="X")
+hist(X.more, breaks=xgrid, ylim=c(0,21), main="Histogram of X.more", xlab="X.more")
+hist(c(X,X.more), breaks=xgrid, ylim=c(0,21),main="Histogram of X & X.more", xlab="X & X.more")
+```
+
+## Question 2a
+
+![](4.png)
+
+##  Question 2b
+
+![](5.png)
+
+## Question 2c
+
+```{r}
+# w.init : initial value for pi
+# p.init : initial value for mu
+# epsilon : If the incomplete log-likelihood has changed by less than epsilon,
+# EM will stop.
+# max.iter : maximum number of EM-iterations
+mixture.EM <- function(X, XO, w.init, p.init, epsilon=1e-5, max.iter=500) {
+  w.curr = w.init
+  p.curr = p.init
+  # store incomplete log-likehoods for each iteration
+  log_liks = c()
+  # compute incomplete log-likehoods using initial values of parameters.
+  log_liks = c(log_liks, compute.log.lik(X, XO, w.curr, p.curr)$ill)
+  # set the change in incomplete log-likelihood with 1
+  delta.ll = 1
+  # number of iteration
+  n.iter = 1
+  # If the log-likelihood has changed by less than epsilon, EM will stop.
+  while((delta.ll > epsilon) & (n.iter <= max.iter)){
+    # run EM step
+    EM.out = EM.iter(X, XO, w.curr, p.curr)
+    # replace the current value with the new parameter estimate
+    w.curr = EM.out$w.new
+    p.curr = EM.out$p.new
+    # incomplete log-likehoods with new parameter estimate
+    log_liks = c(log_liks, compute.log.lik(X, XO, w.curr, p.curr)$ill)
+    # compute the change in incomplete log-likelihood
+    delta.ll = log_liks[length(log_liks)] - log_liks[length(log_liks)-1]
+    # increase the number of iteration
+    n.iter = n.iter + 1
+  }
+  return(list(w.curr=w.curr, p.curr=p.curr, log_liks=log_liks))
+}
+
+EM.iter <- function(X, XO, w.curr, p.curr) {
+  # E-step: compute E_{Z|X,\theta_0}[I(Z_i = k)]
+  # for each sample $X_i$, compute $P(X_i, Z_i=k)$
+  prob.x.z = compute.prob.x.z(X, w.curr, p.curr)$prob.x.z
+  # compute P(Z_i=k | X_i)
+  P_ik = prob.x.z / rowSums(prob.x.z)
+  # M-step
+  w.new = colSums(P_ik)/sum(P_ik) # sum(P_ik) is equivalent to sample size
+  # changing this
+   p.new=rep(NA,length(w.new))
+  p.new[2:3] = (10*colSums(P_ik)/(10*colSums(P_ik)+colSums(P_ik*X)))[2:3]
+  p.new[1]=(10*colSums(P_ik)[1]+10*length(XO))/(10*colSums(P_ik)[1]+10*length(XO)+colSums(P_ik*X)[1]+sum(XO))
+
+  # p.new = 10*colSums(P_ik)/(10*colSums(P_ik)+colSums(P_ik*X))
+  return(list(w.new=w.new, p.new=p.new))
+}
+
+# Compute incomplete log-likehoods
+compute.log.lik <- function(X, XO, w.curr, p.curr) {
+  # for each sample $X_i$, compute $P(X_i, Z_i=k)$
+  prob.x.z = compute.prob.x.z(X, w.curr, p.curr)$prob.x.z
+  # incomplete log-likehoods
+  ill = sum(log(rowSums(prob.x.z)))+sum(log(dnbinom(XO,10,p.curr[1])))
+  return(list(ill=ill))
+}
+# for each sample $X_i$, compute $P(X_i, Z_i=k)$
+compute.prob.x.z <- function(X, w.curr, p.curr) {
+  # for each sample $X_i$, compute $P(X_i, Z_i=k)$. Store these values in the columns of L:
+  L = matrix(NA, nrow=length(X), ncol= length(w.curr))
+  for(k in seq_len(ncol(L))) {
+    L[, k] = dnbinom(X,10, p.curr[k])*w.curr[k]
+  }
+  return(list(prob.x.z=L))
+}
+```
+
+```{r}
+EM3 <- mixture.EM(X, XO=X.more, w.init=c(0.1,0.3, 0.6), p.init=c(0.1, 0.8, 0.5), epsilon=1e-5, max.iter=500)
+ee3 = EM3
+print(paste("Estimate pi = (", round(ee3$w.curr[1],2), ",",
+            round(ee3$w.curr[2],2), ",",
+            round(ee3$w.curr[3],2), ")", sep=""))
+
+print(paste("Estimate p = (", round(ee3$p.curr[1],2), ",",
+            round(ee3$p.curr[2],2), ",",
+            round(ee3$p.curr[3],2), ")", sep=""))
+
+plot(ee3$log_liks, ylab='incomplete log-likelihood', xlab='iteration')
+```
+
+```{r}
+EM4 <- mixture.EM(X,XO=X.more, w.init=c(0.2,0.4, 0.4), p.init=c(0.3, 0.2, 0.7), epsilon=1e-5, max.iter=500)
+ee4 = EM4
+
+print(paste("Estimate pi = (", round(ee4$w.curr[1],2), ",",
+            round(ee4$w.curr[2],2), ",",
+            round(ee4$w.curr[3],2), ")", sep=""))
+
+print(paste("Estimate p = (", round(ee4$p.curr[1],2), ",",
+            round(ee4$p.curr[2],2), ",",
+            round(ee4$p.curr[3],2), ")", sep=""))
+
+plot(ee4$log_liks, ylab='incomplete log-likelihood', xlab='iteration')
+```
+
+
+Check which estimators have the highest incomplete log-likelihood.
+```{r}
+EM3$log_liks[length(EM3$log_liks)]
+
+EM4$log_liks[length(EM4$log_liks)]
+``` 
+Estimators from the 2nd(EM4) run has the highest incomplete log-likelihood. 
+I will choose the estimators form the second EM(4) run
+$\hat\pi_1$ = 0.26, $\hat\pi_2$= 0.25, $\hat\pi_3$= 0.48, $\hat{p}_1$ =0.28, $\hat{p}_2$=0.14, $\hat{p}_3$=0.56.
